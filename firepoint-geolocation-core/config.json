@@ -1,0 +1,15 @@
+{
+  "demSources": {
+    "chongqing-nanan": {
+      "path": "D:\\GISData\\Dem\\重庆市\\不统计\\南岸区\\重庆市_不统计_南岸区.tif",
+      "verticalDatum": "unknown"
+    }
+  },
+  "cors": {
+    "origins": [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ],
+    "originRegex": "^http://(localhost|127\\.0\\.0\\.1)(:\\d+)?$"
+  }
+}

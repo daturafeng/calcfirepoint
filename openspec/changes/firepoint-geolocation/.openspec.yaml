@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-24
+goal: Produce a validated implementation-ready specification without starting
+  code development.

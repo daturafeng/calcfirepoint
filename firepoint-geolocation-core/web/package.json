@@ -1,0 +1,32 @@
+{
+  "name": "firepoint-geolocation-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "overrides": {
+    "@zip.js/zip.js": "2.7.34"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.3.2",
+    "@zip.js/zip.js": "2.7.34",
+    "antd": "^6.6.1",
+    "cesium": "1.130.0",
+    "fabric": "^7.4.0",
+    "mersenne-twister": "1.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vite-plugin-cesium": "^1.2.23"
+  }
+}

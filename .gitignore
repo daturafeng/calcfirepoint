@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Node.js and frontend builds
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Local logs and runtime files
+logs/
+*.log
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local Codex runtime state
+.codex/
