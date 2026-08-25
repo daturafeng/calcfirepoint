@@ -79,7 +79,7 @@ async function readNumericDirectoryNames(url: string, signal?: AbortSignal) {
   const names = extractHrefNames(html);
   return names
     .filter((name) => name.endsWith('/'))
-    .map((name) => Number(name.replaceAll('/', '')))
+    .map((name) => Number(name.split('/').join('')))
     .filter((value) => Number.isFinite(value));
 }
 

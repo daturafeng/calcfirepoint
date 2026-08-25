@@ -192,6 +192,15 @@ For map drawing, annotation, geometry rendering, and related interactions, the f
 - **WHEN** a developer adds or changes map annotation behavior
 - **THEN** the implementation SHALL use the existing Cesium engine drawing or annotation manager when it supports the required behavior
 
+### Requirement: Provide a standalone Cesium engine boundary
+
+The migrated Cesium engine SHALL be importable without dock cloud-service clients, dock authentication constants, dock scene registries, or dock user-preference storage. Standard Cesium Viewer, imagery, standard 3D Tiles, drawing, annotation, camera, coordinate, and height capabilities SHALL receive resource URLs and options from their caller rather than loading dock runtime scenes internally.
+
+#### Scenario: Standalone project imports the engine
+
+- **WHEN** the fire-point frontend imports a Cesium engine capability
+- **THEN** its transitive engine imports SHALL not reference dock cloud-service modules, dock authentication constants, or the browser storage keys used by dock scene preferences
+
 ### Requirement: Hydrate observation inputs from supported image metadata
 
 After an operator selects an image, the interface SHALL apply valid recognised image metadata, including an explicitly timezone-qualified capture timestamp when available, to the corresponding observation inputs. If a field is not present, invalid, or unsupported, the interface SHALL retain its configured default or current value and identify that metadata could not be used for that field.
@@ -228,6 +237,15 @@ The map SHALL display the longitude and latitude under the pointer together with
 
 - **WHEN** an operator moves the pointer over a resolvable location on the map
 - **THEN** the map footer SHALL display formatted longitude, latitude, and camera-view height
+
+### Requirement: Preserve smooth camera interaction during pointer feedback
+
+The map SHALL bound presentation-layer hover-coordinate updates and terrain/ellipsoid coordinate picking so raw pointer events do not trigger an unbounded number of React renders or scene-depth reads while the operator rotates, pans, or zooms the Cesium camera. It SHALL continue to present the latest resolvable location after the bounded refresh interval.
+
+#### Scenario: Operator rotates the map while pointer feedback is active
+
+- **WHEN** Cesium emits high-frequency pointer-move events during camera rotation
+- **THEN** the map SHALL pause terrain picking and footer updates while the drag is active, retain responsive camera interaction, and resolve the latest pointer position after the interaction ends
 
 ### Requirement: Keep map overlays stable during pointer feedback
 

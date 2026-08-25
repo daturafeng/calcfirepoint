@@ -20,7 +20,7 @@ export function mapNavPositionToStyle(px?: MapNavControlPositionPx): CSSProperti
   return Object.keys(s).length ? s : undefined;
 }
 
-/** cesium-navigation-es6 比例尺挂载层样式（相对地图舞台绝对定位） */
+/** Cesium 比例尺挂载层样式（相对地图舞台绝对定位）。 */
 export function getDistanceLegendMountStyle(
   distanceLegendPositionPx?: MapNavControlPositionPx,
 ): CSSProperties {

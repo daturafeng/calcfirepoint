@@ -4,13 +4,15 @@ import { Cartesian2, Cartesian3, Cartographic, Color, CustomDataSource, Entity, 
 
 import { CesiumAnnotationGeometryManager, type CesiumPolygonOverlay, type CesiumRouteOverlay } from '../utils/cesium/CesiumAnnotationGeometryManager';
 import { Draw } from '../utils/cesium/Draw';
+import { getCameraHeight } from '../utils/cesium/cameraHeight';
 import { createStandardViewer } from '../utils/cesium/viewer';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { mapConfig } from '../config';
 import type { CalculationResponse, FormValues, ProjectedGeometry } from '../types';
 
-type HoverLocation = { longitude: number; latitude: number; viewHeightM: number };
+type HoverLocation = { longitude: number; latitude: number; viewHeightM: number | null };
 const EMPTY_GEOMETRIES: ProjectedGeometry[] = [];
+const HOVER_UPDATE_INTERVAL_MS = 80;
 
 function flyToCameraPose(instance: Viewer, values: FormValues) {
   if (![values.longitude, values.latitude, values.absoluteElevationM, values.azimuthDeg, values.pitchDeg, values.rollDeg].every(Number.isFinite)) return;
@@ -27,16 +29,15 @@ function flyToCameraPose(instance: Viewer, values: FormValues) {
 
 function pickHoverLocation(instance: Viewer, position: { x: number; y: number }): HoverLocation | null {
   const screenPosition = new Cartesian2(position.x, position.y);
-  const cartesian = instance.scene.pickPositionSupported
-    ? instance.scene.pickPosition(screenPosition)
-    : undefined;
-  const fallback = cartesian ?? instance.camera.pickEllipsoid(screenPosition, instance.scene.globe.ellipsoid);
+  const ray = instance.camera.getPickRay(screenPosition);
+  const terrainPosition = ray ? instance.scene.globe.pick(ray, instance.scene) : undefined;
+  const fallback = terrainPosition ?? instance.camera.pickEllipsoid(screenPosition, instance.scene.globe.ellipsoid);
   if (!fallback) return null;
   const cartographic = Cartographic.fromCartesian(fallback);
   return {
     longitude: CesiumMath.toDegrees(cartographic.longitude),
     latitude: CesiumMath.toDegrees(cartographic.latitude),
-    viewHeightM: instance.camera.positionCartographic.height,
+    viewHeightM: getCameraHeight(instance),
   };
 }
 
@@ -64,11 +65,85 @@ export function MapCanvas({ values, result, geometries = EMPTY_GEOMETRIES, camer
     pointDrawer.current = new Draw(instance, { dataSource: pointSource });
     viewer.current = instance;
     const pointerHandler = new ScreenSpaceEventHandler(instance.canvas);
+    let hoverUpdateTimer: number | undefined;
+    let cameraInteractionTimer: number | undefined;
+    let lastHoverUpdateAt = 0;
+    let latestPointerPosition: Cartesian2 | null = null;
+    let cameraInteractionActive = false;
+
+    const publishHoverLocation = () => {
+      hoverUpdateTimer = undefined;
+      if (cameraInteractionActive || !latestPointerPosition) return;
+      const nextLocation = pickHoverLocation(instance, latestPointerPosition);
+      setHoverLocation((currentLocation) => (
+        currentLocation?.longitude === nextLocation?.longitude
+        && currentLocation?.latitude === nextLocation?.latitude
+        && currentLocation?.viewHeightM === nextLocation?.viewHeightM
+          ? currentLocation
+          : nextLocation
+      ));
+      lastHoverUpdateAt = window.performance.now();
+    };
+
+    const scheduleHoverLocation = (immediately = false) => {
+      if (cameraInteractionActive || !latestPointerPosition) return;
+      if (immediately) {
+        if (hoverUpdateTimer !== undefined) window.clearTimeout(hoverUpdateTimer);
+        publishHoverLocation();
+        return;
+      }
+      if (hoverUpdateTimer !== undefined) return;
+      const delay = Math.max(0, HOVER_UPDATE_INTERVAL_MS - (window.performance.now() - lastHoverUpdateAt));
+      hoverUpdateTimer = window.setTimeout(publishHoverLocation, delay);
+    };
+
+    const beginCameraInteraction = () => {
+      cameraInteractionActive = true;
+      if (hoverUpdateTimer !== undefined) {
+        window.clearTimeout(hoverUpdateTimer);
+        hoverUpdateTimer = undefined;
+      }
+    };
+
+    const endCameraInteraction = () => {
+      cameraInteractionActive = false;
+      scheduleHoverLocation(true);
+    };
+
+    const pauseForWheel = () => {
+      beginCameraInteraction();
+      if (cameraInteractionTimer !== undefined) window.clearTimeout(cameraInteractionTimer);
+      cameraInteractionTimer = window.setTimeout(endCameraInteraction, HOVER_UPDATE_INTERVAL_MS);
+    };
+
+    const clearHoverLocation = () => {
+      latestPointerPosition = null;
+      if (hoverUpdateTimer !== undefined) {
+        window.clearTimeout(hoverUpdateTimer);
+        hoverUpdateTimer = undefined;
+      }
+      setHoverLocation(null);
+    };
+
     pointerHandler.setInputAction((movement: ScreenSpaceEventHandler.MotionEvent) => {
-      setHoverLocation(pickHoverLocation(instance, movement.endPosition));
+      latestPointerPosition = new Cartesian2(movement.endPosition.x, movement.endPosition.y);
+      scheduleHoverLocation();
     }, ScreenSpaceEventType.MOUSE_MOVE);
+    pointerHandler.setInputAction(beginCameraInteraction, ScreenSpaceEventType.LEFT_DOWN);
+    pointerHandler.setInputAction(endCameraInteraction, ScreenSpaceEventType.LEFT_UP);
+    pointerHandler.setInputAction(beginCameraInteraction, ScreenSpaceEventType.MIDDLE_DOWN);
+    pointerHandler.setInputAction(endCameraInteraction, ScreenSpaceEventType.MIDDLE_UP);
+    pointerHandler.setInputAction(beginCameraInteraction, ScreenSpaceEventType.RIGHT_DOWN);
+    pointerHandler.setInputAction(endCameraInteraction, ScreenSpaceEventType.RIGHT_UP);
+    pointerHandler.setInputAction(beginCameraInteraction, ScreenSpaceEventType.PINCH_START);
+    pointerHandler.setInputAction(endCameraInteraction, ScreenSpaceEventType.PINCH_END);
+    pointerHandler.setInputAction(pauseForWheel, ScreenSpaceEventType.WHEEL);
+    instance.canvas.addEventListener('mouseleave', clearHoverLocation);
 
     return () => {
+      if (hoverUpdateTimer !== undefined) window.clearTimeout(hoverUpdateTimer);
+      if (cameraInteractionTimer !== undefined) window.clearTimeout(cameraInteractionTimer);
+      instance.canvas.removeEventListener('mouseleave', clearHoverLocation);
       pointerHandler.destroy();
       annotationManager.current?.destroy();
       pointDrawer.current?.destroy();
@@ -127,7 +202,7 @@ export function MapCanvas({ values, result, geometries = EMPTY_GEOMETRIES, camer
     <div className="map-canvas" ref={host} aria-label="火点定位三维地图">
       <button className="map-camera-recall" type="button" aria-label="定位回相机视角" title="定位回相机视角" onClick={() => { if (viewer.current) flyToCameraPose(viewer.current, values); }}><AimOutlined /></button>
       <div className="map-hover-info" aria-live="polite">
-        {hoverLocation ? <><span>经度 {hoverLocation.longitude.toFixed(6)}°</span><span>纬度 {hoverLocation.latitude.toFixed(6)}°</span><span>视角高 {hoverLocation.viewHeightM.toFixed(1)} m</span></> : <span>移动鼠标查看坐标与视角高度</span>}
+        {hoverLocation ? <><span>经度 {hoverLocation.longitude.toFixed(6)}°</span><span>纬度 {hoverLocation.latitude.toFixed(6)}°</span><span>视角高 {hoverLocation.viewHeightM === null ? '--' : `${hoverLocation.viewHeightM.toFixed(1)} m`}</span></> : <span>移动鼠标查看坐标与视角高度</span>}
       </div>
     </div>
   );

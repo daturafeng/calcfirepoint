@@ -9,12 +9,7 @@ import {
   Viewer,
 } from 'cesium';
 
-import type { MapScenePageKey } from '@/services/cloud/mapSceneRegistry';
-import {
-  createCesiumNavigationToolbar,
-  type CesiumNavigationToolbarOptions,
-  type CesiumToolbarNavigation,
-} from './cesiumNavigationToolbar';
+import { getCameraHeight as readCameraHeight } from './cameraHeight';
 import { Draw } from './Draw';
 import {
   CesiumImageryOverlayManager,
@@ -26,11 +21,6 @@ import {
   type CesiumMapToolbarCommand,
 } from './mapToolbarCamera';
 import {
-  createSceneResourceController,
-  type SceneResourceLayerState,
-  type SceneResourceLoadErrorType,
-} from './sceneResourceController';
-import {
   CesiumTilesetOverlayManager,
   type CesiumTilesetOverlayConfig,
   type CesiumTilesetOverlayFocusOptions,
@@ -41,15 +31,11 @@ export interface CesiumMapEngineOptions {
   container: HTMLElement;
   dataSourceId?: string;
   drawDataSourceId?: string;
-  scenePageKey: MapScenePageKey;
-  enableCesiumNavigation?: boolean;
-  cesiumNavigationOptions?: Partial<CesiumNavigationToolbarOptions>;
   onResourceLoadError?: (
-    resourceType: SceneResourceLoadErrorType,
+    resourceType: 'imagery' | '3dtileset',
     resourceId: string,
     error: unknown,
   ) => void;
-  onSceneLayerStateChange?: (state: SceneResourceLayerState) => void;
 }
 
 export interface CesiumCameraPoint {
@@ -100,7 +86,6 @@ export interface CesiumMapEngine {
   viewer: Viewer;
   dataSource: CustomDataSource;
   draw: Draw;
-  navigation: CesiumToolbarNavigation | null;
   executeToolbarCommand: (command: CesiumMapToolbarCommand) => void;
   executeCameraCommand: (command: CesiumCameraCommand) => void;
   syncImageryOverlays: (overlays: CesiumImageryOverlayConfig[]) => void;
@@ -109,22 +94,9 @@ export interface CesiumMapEngine {
     options?: CesiumImageryOverlayFocusOptions,
   ) => void;
   syncTilesetOverlays: (overlays: CesiumTilesetOverlayConfig[]) => void;
-  hasVisibleTerraGsOverlays: () => boolean;
-  hasVisibleAdaptiveTerraGsOverlays: () => boolean;
   focusTilesetOverlay: (
     overlayId: string,
     options?: CesiumTilesetOverlayFocusOptions,
-  ) => void;
-  reloadSceneResources: () => Promise<void>;
-  getSceneLayerState: () => SceneResourceLayerState;
-  selectSceneBaseMap: (layerId: string) => void;
-  selectSceneTerrain: (layerId: string) => void;
-  setSceneTerrainEnabled: (enabled: boolean) => void;
-  setSceneModel3dEnabled: (layerId: string, enabled: boolean) => void;
-  setSceneOverlayEnabled: (
-    groupKey: string,
-    layerId: string,
-    enabled: boolean,
   ) => void;
   pickLngLatFromCanvasPosition: (
     screenPosition?: { x: number; y: number } | null,
@@ -132,6 +104,8 @@ export interface CesiumMapEngine {
   pickLngLatFromGlobe: (
     screenPosition?: { x: number; y: number } | null,
   ) => { lng: number; lat: number } | null;
+  /** 获取当前相机相对椭球面的视角高度；高度不可用时返回空值。 */
+  getCameraHeight: () => number | null;
   destroy: () => void;
 }
 
@@ -139,12 +113,6 @@ export function createCesiumMapEngine(
   options: CesiumMapEngineOptions,
 ): CesiumMapEngine {
   const viewer = createStandardViewer(options.container);
-  const sceneResourceController = createSceneResourceController(
-    viewer,
-    options.scenePageKey,
-    options.onResourceLoadError,
-    { onLayerStateChange: options.onSceneLayerStateChange },
-  );
   const dataSource = new CustomDataSource(
     options.dataSourceId ?? 'cesium-map-engine',
   );
@@ -166,11 +134,6 @@ export function createCesiumMapEngine(
     (resourceId, error) =>
       options.onResourceLoadError?.('3dtileset', resourceId, error),
   );
-
-  const navigation =
-    options.enableCesiumNavigation === false
-      ? null
-      : createCesiumNavigationToolbar(viewer, options.cesiumNavigationOptions);
 
   const executeToolbarCommand = (command: CesiumMapToolbarCommand) => {
     applyCesiumMapToolbarZoomAndBase(viewer, command);
@@ -367,11 +330,11 @@ export function createCesiumMapEngine(
     };
   };
 
+  const getCameraHeight = () => readCameraHeight(viewer);
+
   const destroy = () => {
     imageryOverlayManager.destroy();
     tilesetOverlayManager.destroy();
-    sceneResourceController.destroy();
-    navigation?.destroy();
     draw.destroy();
     dataSource.entities.removeAll();
     viewer.dataSources.remove(dataSource);
@@ -382,7 +345,6 @@ export function createCesiumMapEngine(
     viewer,
     dataSource,
     draw,
-    navigation,
     executeToolbarCommand,
     executeCameraCommand,
     syncImageryOverlays(overlays) {
@@ -394,40 +356,12 @@ export function createCesiumMapEngine(
     syncTilesetOverlays(overlays) {
       tilesetOverlayManager.sync(overlays);
     },
-    hasVisibleTerraGsOverlays() {
-      return tilesetOverlayManager.hasVisibleTerraGs();
-    },
-    hasVisibleAdaptiveTerraGsOverlays() {
-      return tilesetOverlayManager.hasVisibleTerraGs({
-        adaptiveOnly: true,
-      });
-    },
     focusTilesetOverlay(overlayId, options) {
       tilesetOverlayManager.focus(overlayId, options);
     },
-    reloadSceneResources() {
-      return sceneResourceController.reload(true);
-    },
-    getSceneLayerState() {
-      return sceneResourceController.getLayerState();
-    },
-    selectSceneBaseMap(layerId) {
-      sceneResourceController.selectBaseMap(layerId);
-    },
-    selectSceneTerrain(layerId) {
-      sceneResourceController.selectTerrain(layerId);
-    },
-    setSceneTerrainEnabled(enabled) {
-      sceneResourceController.setTerrainEnabled(enabled);
-    },
-    setSceneModel3dEnabled(layerId, enabled) {
-      sceneResourceController.setModel3dEnabled(layerId, enabled);
-    },
-    setSceneOverlayEnabled(groupKey, layerId, enabled) {
-      sceneResourceController.setOverlayEnabled(groupKey, layerId, enabled);
-    },
     pickLngLatFromCanvasPosition,
     pickLngLatFromGlobe,
+    getCameraHeight,
     destroy,
   };
 }

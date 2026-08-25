@@ -57,6 +57,10 @@
 - [x] 4.28 Align Fabric pointer/overlay mapping to the actual canvas dimensions and preserve the first rectangle corner marker.
 - [x] 4.29 Keep the pending rectangle and first-corner marker in one atomic Fabric selection state.
 - [x] 4.30 Render Fabric target rectangles with an explicit left/top origin matching target-box coordinates.
+- [x] 4.31 Bound Cesium hover-footer state updates so single-point camera rotation remains smooth.
+- [x] 4.32 Bound Cesium terrain/ellipsoid hover picking itself during camera rotation.
+- [x] 4.33 Synchronize dock's Cesium camera-height engine capability and use it in the standalone map footer.
+- [x] 4.34 Remove dock cloud, product-domain, and optional integration dependencies from the migrated Cesium engine while retaining the standard Cesium capability set.
 
 ## 5. Verification and rollout
 
