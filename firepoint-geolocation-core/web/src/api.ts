@@ -1,5 +1,5 @@
 import { mapConfig } from './config';
-import type { CalculationResponse, FormValues, ImageMetadata, ProjectedGeometry } from './types';
+import type { CalculationResponse, FormValues, ImageMetadata, MultiCameraObservation, MultiCameraResponse, ProjectedGeometry } from './types';
 
 async function readResponse<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T;
@@ -29,6 +29,31 @@ export async function calculateLocation(file: File | null, values: FormValues, i
   if (file) form.append('image', file);
   const response = await fetch(`${mapConfig.apiBaseUrl}/api/v1/geolocations/calculate`, { method: 'POST', body: form });
   return readResponse<CalculationResponse>(response);
+}
+
+export async function intersectCameraObservations(observations: MultiCameraObservation[]): Promise<MultiCameraResponse> {
+  const data = {
+    demSourceId: 'chongqing-nanan',
+    observations: observations.map((item) => ({
+      id: item.id,
+      name: item.name,
+      observation: {
+        id: item.id,
+        capturedAt: item.values.capturedAt,
+        imageryType: 'visible',
+        image: item.imageSize,
+        targetBox: { x: item.values.x, y: item.values.y, width: item.values.width, height: item.values.height },
+        targetPixelStrategy: 'bbox_center',
+      },
+      camera: { longitude: item.values.longitude, latitude: item.values.latitude, absoluteElevationM: item.values.absoluteElevationM, horizontalCrs: 'WGS84', verticalDatum: 'unknown' },
+      pose: { azimuthDeg: item.values.azimuthDeg, pitchDeg: item.values.pitchDeg, rollDeg: item.values.rollDeg },
+      calibration: { horizontalFovDeg: item.values.horizontalFovDeg, verticalFovDeg: item.values.verticalFovDeg },
+      calculation: { maxDistanceM: 20000, stepM: 5, positionErrorM: 2, angleErrorDeg: 0.5, demVerticalErrorM: 5 },
+    })),
+  };
+  const form = new FormData();
+  form.append('payload', JSON.stringify(data));
+  return readResponse<MultiCameraResponse>(await fetch(`${mapConfig.apiBaseUrl}/api/v1/geolocations/intersect`, { method: 'POST', body: form }));
 }
 
 export async function projectGeometry(values: FormValues, imageSize: { width: number; height: number }, geometryType: string, pixels: Array<{x:number;y:number}>): Promise<ProjectedGeometry> {

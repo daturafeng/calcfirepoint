@@ -8,7 +8,7 @@ import { getCameraHeight } from '../utils/cesium/cameraHeight';
 import { createStandardViewer } from '../utils/cesium/viewer';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { mapConfig } from '../config';
-import type { CalculationResponse, FormValues, ProjectedGeometry } from '../types';
+import type { CalculationResponse, FormValues, MultiCameraObservation, MultiCameraResponse, ProjectedGeometry } from '../types';
 
 type HoverLocation = { longitude: number; latitude: number; viewHeightM: number | null };
 const EMPTY_GEOMETRIES: ProjectedGeometry[] = [];
@@ -41,7 +41,9 @@ function pickHoverLocation(instance: Viewer, position: { x: number; y: number })
   };
 }
 
-export function MapCanvas({ values, result, geometries = EMPTY_GEOMETRIES, cameraPoseRequestId = 0 }: { values: FormValues; result: CalculationResponse | null; geometries?: ProjectedGeometry[]; cameraPoseRequestId?: number }) {
+type MultiCameraOverlay = { observations: MultiCameraObservation[]; result: MultiCameraResponse | null };
+
+export function MapCanvas({ values, result, geometries = EMPTY_GEOMETRIES, cameraPoseRequestId = 0, multiCamera }: { values: FormValues; result: CalculationResponse | null; geometries?: ProjectedGeometry[]; cameraPoseRequestId?: number; multiCamera?: MultiCameraOverlay }) {
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer>();
   const annotationManager = useRef<CesiumAnnotationGeometryManager>();
@@ -162,8 +164,15 @@ export function MapCanvas({ values, result, geometries = EMPTY_GEOMETRIES, camer
 
     instance.entities.removeAll();
     drawer.clear();
-    const camera = Cartesian3.fromDegrees(values.longitude, values.latitude, values.absoluteElevationM);
-    instance.entities.add(new Entity({ position: camera, point: { pixelSize: 11, color: Color.CYAN }, label: { text: '相机' } }));
+    if (multiCamera?.observations.length) {
+      multiCamera.observations.forEach((observation, index) => {
+        const camera = Cartesian3.fromDegrees(observation.values.longitude, observation.values.latitude, observation.values.absoluteElevationM);
+        instance.entities.add(new Entity({ position: camera, point: { pixelSize: 11, color: index % 2 ? Color.LIME : Color.CYAN }, label: { text: observation.name } }));
+      });
+    } else {
+      const camera = Cartesian3.fromDegrees(values.longitude, values.latitude, values.absoluteElevationM);
+      instance.entities.add(new Entity({ position: camera, point: { pixelSize: 11, color: Color.CYAN }, label: { text: '相机' } }));
+    }
 
     const routes: CesiumRouteOverlay[] = [];
     const polygons: CesiumPolygonOverlay[] = [];
@@ -184,7 +193,17 @@ export function MapCanvas({ values, result, geometries = EMPTY_GEOMETRIES, camer
     if (point) {
       drawer.drawPoint({ lng: point.longitude, lat: point.latitude, height: point.elevationM }, { color: '#ff4d4f', outlineColor: '#ffffff', point: { pixelSize: 16, outlineWidth: 3 } });
     }
-  }, [values, result, geometries]);
+    const intersection = multiCamera?.result?.location;
+    if (intersection) {
+      const target = Cartesian3.fromDegrees(intersection.longitude, intersection.latitude, intersection.elevationM);
+      multiCamera.observations.forEach((observation, index) => {
+        const camera = Cartesian3.fromDegrees(observation.values.longitude, observation.values.latitude, observation.values.absoluteElevationM);
+        instance.entities.add(new Entity({ polyline: { positions: [camera, target], width: 3, material: index % 2 ? Color.LIME.withAlpha(0.9) : Color.CYAN.withAlpha(0.9) } }));
+      });
+      drawer.drawPoint({ lng: intersection.longitude, lat: intersection.latitude, height: intersection.elevationM }, { color: '#ff4d4f', outlineColor: '#ffffff', point: { pixelSize: 16, outlineWidth: 3 } });
+      instance.entities.add(new Entity({ position: target, ellipse: { semiMajorAxis: Math.max(1, intersection.horizontalUncertaintyM), semiMinorAxis: Math.max(1, intersection.horizontalUncertaintyM), material: Color.RED.withAlpha(0.18), outline: true, outlineColor: Color.RED } }));
+    }
+  }, [values, result, geometries, multiCamera]);
 
   useEffect(() => {
     const instance = viewer.current;

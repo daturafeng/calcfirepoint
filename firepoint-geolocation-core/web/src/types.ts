@@ -45,3 +45,38 @@ export interface ProjectedGeometry {
   geometryType: 'point' | 'line' | 'polygon';
   coordinates: ProjectedCoordinate[];
 }
+
+export interface MultiCameraObservation {
+  id: string;
+  name: string;
+  file: File | null;
+  imageSize: { width: number; height: number };
+  values: FormValues;
+  metadata: ImageMetadata | null;
+  metadataStatus: string | null;
+}
+
+export interface MultiCameraContribution {
+  id: string;
+  name: string;
+  slantDistanceM: number;
+  residualM: number;
+  targetPixel: { x: number; y: number };
+}
+
+export interface MultiCameraLocation {
+  longitude: number;
+  latitude: number;
+  elevationM: number;
+  horizontalUncertaintyM: number;
+  quality: 'high' | 'medium' | 'low';
+  minRayAngleDeg: number;
+  observations: MultiCameraContribution[];
+}
+
+export interface MultiCameraResponse {
+  status: 'ready' | 'not_ready';
+  checks: Array<{ name: string; status: string; reason?: string }>;
+  location: MultiCameraLocation | null;
+  quality?: { minRayAngleDeg?: number | null; observations: MultiCameraContribution[] };
+}

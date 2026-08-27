@@ -1,4 +1,4 @@
-import { AimOutlined, EditOutlined } from '@ant-design/icons';
+import { AimOutlined, EditOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import { ConfigProvider, Tabs, Tag, theme } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -6,6 +6,7 @@ import { calculateLocation, inspectImage } from './api';
 import { applyImageMetadata } from './imageMetadata';
 import { ImageAnnotationPage } from './components/ImageAnnotationPage';
 import { MapCanvas } from './components/MapCanvas';
+import { MultiCameraIntersectionPage } from './components/MultiCameraIntersectionPage';
 import { ObservationForm } from './components/ObservationForm';
 import { ResultPanel } from './components/ResultPanel';
 import type { CalculationResponse, FormValues, ImageMetadata } from './types';
@@ -14,7 +15,7 @@ const initialValues: FormValues = {
   capturedAt: '2026-06-22T03:11:26+08:00', longitude: 106.586110015, latitude: 29.595824927, absoluteElevationM: 348.71,
   azimuthDeg: -45.2, pitchDeg: -45, rollDeg: 0, horizontalFovDeg: 84, verticalFovDeg: 65.5, x: 1966, y: 1462, width: 100, height: 100,
 };
-type WorkspacePage = 'single' | 'annotation';
+type WorkspacePage = 'single' | 'annotation' | 'multicamera';
 
 export default function App() {
   const [page, setPage] = useState<WorkspacePage>('single');
@@ -64,9 +65,10 @@ export default function App() {
           <Tabs className="page-tabs" activeKey={page} onChange={(key) => setPage(key as WorkspacePage)} items={[
             { key: 'single', label: <span><AimOutlined /> 单点定位</span> },
             { key: 'annotation', label: <span><EditOutlined /> 影像标绘</span> },
+            { key: 'multicamera', label: <span><NodeIndexOutlined /> 多相机交会</span> },
           ]} />
         </header>
-        {page === 'annotation' ? <ImageAnnotationPage values={values} imageSize={size} /> : (
+        {page === 'annotation' ? <ImageAnnotationPage values={values} imageSize={size} /> : page === 'multicamera' ? <MultiCameraIntersectionPage initialValues={values} /> : (
           <section className="content" aria-label="单点定位工作区">
             <ObservationForm values={values} setValues={setValues} file={file} preview={preview} metadata={metadata} metadataStatus={metadataStatus} imageSize={size} onFile={onFile} onCalculate={onCalculate} busy={busy} />
             <div className="map-shell">

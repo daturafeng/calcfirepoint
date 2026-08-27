@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from firepoint_core.metadata import inspect_image_bytes
+from firepoint_core.multicamera import calculate_multicamera_intersection
 from firepoint_core.pipeline import calculate_location
 
 from .dem_sources import inspect_source, resolve_dem
@@ -58,6 +59,18 @@ async def calculate(
     return JSONResponse(status_code=200 if result["status"] == "ready" else 422, content=result)
 
 
+@app.post("/api/v1/geolocations/intersect")
+async def intersect(payload: Annotated[str, Form(...)]) -> JSONResponse:
+    try:
+        data = json.loads(payload)
+        dem_source_id = str(data.pop("demSourceId"))
+        data["dem"] = resolve_dem(dem_source_id)
+    except (json.JSONDecodeError, KeyError, FileNotFoundError) as error:
+        raise HTTPException(status_code=422, detail={"status": "not_ready", "reason": str(error)}) from error
+    result = calculate_multicamera_intersection(data)
+    return JSONResponse(status_code=200 if result["status"] == "ready" else 422, content=result)
+
+
 @app.post("/api/v1/geometries/project")
 async def project_geometry(payload: Annotated[str, Form(...)]) -> JSONResponse:
     """Project ordered image pixels to ordered WGS84 geometry coordinates."""
@@ -94,4 +107,4 @@ async def project_geometry(payload: Annotated[str, Form(...)]) -> JSONResponse:
 def run() -> None:
     import uvicorn
 
-    uvicorn.run("firepoint_api.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("firepoint_api.main:app", host="0.0.0.0", port=8990, reload=True)
